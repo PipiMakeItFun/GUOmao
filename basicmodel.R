@@ -13,62 +13,66 @@ unique(data$中欧班列开通时间)
 data$treat <- ifelse(data$中欧班列开通时间 == 10000000, 0, 1)
 head(data[, c("中欧班列开通时间", "treat")])
 data$X <- data$after * data$treat
-model_1 <- lm(log(wastewater_ems) ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
+#model1:log熵权法数据-有控制变量-有固定效应版本
+model_1 <- lm(log(entropy_score) ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
 summary(model_1)
-model_2 <- lm(log(SO2_ems) ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
+#model2:熵权法数据-有控制变量-有固定效应版本
+model_2 <- lm(entropy_score ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
 summary(model_2)
-model_3 <- lm(log(smoke_ems) ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
+#model3:log熵权法数据-控制变量删去pop_num-有固定效应版本--最终选择版本
+model_3 <- lm(log(entropy_score) ~ X + LN_GDP + FIEI + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
 summary(model_3)
-#开始画图
-library(dplyr)
+#model4:熵权法数据-控制变量删去pop_num-有固定效应版本
+model_4 <- lm(log(entropy_score) ~ X + LN_GDP + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
+summary(model_4)
+#可视化-多期did效应
+model_paratrend <- feols(
+  log(entropy_score + 1e-5) ~ i(year, treat, ref = 2012) + 
+    LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm),
+  data = data
+)
+coef_df <- tidy(model_paratrend) %>%
+  filter(grepl("year::\\d{4}:treat", term)) %>%
+  mutate(year = as.numeric(sub("year::(\\d{4}):treat", "\\1", term)))
+
+ggplot(coef_df, aes(x = year, y = estimate)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),
+                width = 0.3) +
+  geom_vline(xintercept = 2012, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "gray") +
+  scale_x_continuous(breaks = seq(min(coef_df$year), max(coef_df$year), 1)) +
+  labs(
+    x = "Year",
+    y = "Treatment Effect (relative to 2012)",
+    title = "DID Effect Visualization (Event Study Plot)"
+  ) +
+  theme_minimal()
+#可视化-组均值趋势
 did_plot_data <- data %>%
   mutate(group = ifelse(treat == 1, "Treatment", "Control")) %>%
   group_by(group, year) %>%
-  summarise(avg_pollution = mean(log(wastewater_ems), na.rm = TRUE)) %>%
+  summarise(avg_entropy = mean(log(entropy_score), na.rm = TRUE)) %>%
   ungroup()
-library(ggplot2)
-ggplot(did_plot_data, aes(x = year, y = avg_pollution, color = group)) +
+ggplot(did_plot_data, aes(x = year, y = avg_entropy, color = group)) +
   geom_line(size = 1.2) +
+  geom_point(size = 2) +
   geom_vline(xintercept = 2013, linetype = "dashed", color = "gray40") +
-  labs(title = "DID Effect: Wastewater Emissions Over Time",
-       x = "Year", y = "log(Wastewater Emissions)",
-       color = "Group") +
-  theme_minimal()
-#画图1结束，开始szf
-library(dplyr)
-pollution_vars <- data %>%
-  select(Ctnm, year, wastewater_ems, SO2_ems, smoke_ems)
-pollution_std <- pollution_vars %>%
-  mutate(across(c(wastewater_ems, SO2_ems, smoke_ems),
-                ~ (as.numeric(.) - min(as.numeric(.), na.rm = TRUE)) /
-                  (max(as.numeric(.), na.rm = TRUE) - min(as.numeric(.), na.rm = TRUE))))
-std_matrix <- pollution_std %>% select(-Ctnm, -year)
-P <- apply(std_matrix, 2, function(x) {
-  x / sum(x, na.rm = TRUE)
-})
-k <- 1 / log(nrow(P))
-e <- -k * colSums(P * log(P + 1e-10), na.rm = TRUE)
-d <- 1 - e
-w <- d / sum(d)
-print(w)
-composite_score <- as.matrix(std_matrix) %*% w 
-pollution_std$pollution_index <- as.numeric(composite_score)
-data <- data %>%
-  left_join(pollution_std %>% select(Ctnm, year, pollution_index), by = c("Ctnm", "year"))
-model_4 <- lm(log(pollution_index + 1e-5) ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year),
-              data = data)
-summary(model_4)
-model_5 <- lm(log(SO2_ems) ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention , data = data)
-summary(model_5)
-model_6 <- lm(log(SO2_ems) ~ X , data = data)
-summary(model_6)
-model_7 <- lm(SO2_ems ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention , data = data)
-summary(model_7)
-model_8 <- lm(SO2_ems ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
-summary(model_8)
-model9 <- lm(entropy_score ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
-summary(model_9)
-#结论：用sqf，不取对数版本。接下来，平行趋势检验。
+  labs(
+    title = "Trends in Pollution Index (Entropy Score)",
+    subtitle = "Treatment vs Control Groups over Time",
+    x = "Year", y = "Average Entropy Score",
+    color = "Group"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14),
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
+#平行趋势检验
+#para1:有pop
 model_paratrend <- feols(
   log(pollution_index + 1e-5) ~ i(year, treat, ref = 2013) + X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm),
   data = data
@@ -86,17 +90,71 @@ ggplot(coef_df, aes(x = year, y = estimate)) +
   geom_vline(xintercept = 2012, linetype = "dashed") +
   labs(x = "Year", y = "Treatment Effect", title = "Parallel Trend Test") +
   theme_minimal()
-
-table(data$year)
-print(coef_df$year)
-coef_df_all <- tidy(model_paratrend)
-unique(coef_df_all$term)
-#
-model_paratrend <- feols(
-  log(pollution_index + 1e-5) ~ i(year, treat, ref = 2013) +
-    LN_GDP + FIEI + pop_num + openness + gov_intervention |
-    Ctnm + year,
+#平行2:无pop
+model_paratrend2 <- feols(
+  log(pollution_index + 1e-5) ~ i(year, treat, ref = 2013) + X + LN_GDP + FIEI + openness + gov_intervention + factor(Ctnm),
   data = data
 )
+coef_df <- tidy(model_paratrend2) %>%
+  filter(grepl("year::\\d{4}:treat", term)) %>%  # 匹配形如 "year::2010:treat"
+  mutate(
+    year = as.numeric(sub("year::(\\d{4}):treat", "\\1", term))  # 提取出 2010、2011 等年份
+  )
 
+ggplot(coef_df, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax = estimate + 1.96*std.error), width = 0.2) +
+  geom_vline(xintercept = 2012, linetype = "dashed") +
+  labs(x = "Year", y = "Treatment Effect", title = "Parallel Trend Test") +
+  theme_minimal()
+#平行3:无FIEI
+model_paratrend3 <- feols(
+  log(pollution_index + 1e-5) ~ i(year, treat, ref = 2013) + X + LN_GDP + pop_num + openness + gov_intervention + factor(Ctnm),
+  data = data
+)
+coef_df <- tidy(model_paratrend3) %>%
+  filter(grepl("year::\\d{4}:treat", term)) %>%  # 匹配形如 "year::2010:treat"
+  mutate(
+    year = as.numeric(sub("year::(\\d{4}):treat", "\\1", term))  # 提取出 2010、2011 等年份
+  )
+
+ggplot(coef_df, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax = estimate + 1.96*std.error), width = 0.2) +
+  geom_vline(xintercept = 2012, linetype = "dashed") +
+  labs(x = "Year", y = "Treatment Effect", title = "Parallel Trend Test") +
+  theme_minimal()
+#平行4:无控制变量
+model_paratrend4 <- feols(
+  log(pollution_index + 1e-5) ~ i(year, treat, ref = 2013) + X + factor(Ctnm),
+  data = data
+)
+coef_df <- tidy(model_paratrend4) %>%
+  filter(grepl("year::\\d{4}:treat", term)) %>%  # 匹配形如 "year::2010:treat"
+  mutate(
+    year = as.numeric(sub("year::(\\d{4}):treat", "\\1", term))  # 提取出 2010、2011 等年份
+  )
+
+ggplot(coef_df, aes(x = year, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax = estimate + 1.96*std.error), width = 0.2) +
+  geom_vline(xintercept = 2012, linetype = "dashed") +
+  labs(x = "Year", y = "Treatment Effect", title = "Parallel Trend Test") +
+  theme_minimal()
+#可视化版本1
+did_plot_data <- data %>%
+  mutate(group = ifelse(treat == 1, "Treatment", "Control")) %>%
+  group_by(group, year) %>%
+  summarise(avg_pollution = mean(entropy_score, na.rm = TRUE)) %>%
+  ungroup()
+ggplot(did_plot_data, aes(x = year, y = avg_pollution, color = group)) +
+  geom_line(size = 1.2) +
+  geom_vline(xintercept = 2013, linetype = "dashed", color = "gray40") +
+  labs(title = "DID Effect: Wastewater Emissions Over Time",
+       x = "Year", y = "log(Wastewater Emissions)",
+       color = "Group") +
+  theme_minimal()
 
