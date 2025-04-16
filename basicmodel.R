@@ -10,11 +10,8 @@ data$SO2_ems <- as.numeric(as.character(data$SO2_ems))
 data$smoke_ems <- as.numeric(as.character(data$smoke_ems))
 data$entropy_score <- as.numeric(as.character(dataszf$entropy_score))
 unique(data$中欧班列开通时间)
-# 生成 treat 列
 data$treat <- ifelse(data$中欧班列开通时间 == 10000000, 0, 1)
-# 检查生成结果
 head(data[, c("中欧班列开通时间", "treat")])
-# 核心变量
 data$X <- data$after * data$treat
 model_1 <- lm(log(wastewater_ems) ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
 summary(model_1)
@@ -102,20 +99,4 @@ model_paratrend <- feols(
   data = data
 )
 
-# 整理模型结果
-coef_df <- tidy(model_paratrend) %>%
-  filter(grepl("^year::\\d{4}$", term)) %>%  # 只保留格式为 "year::2020" 这样完整的项
-  mutate(year = as.numeric(sub("year::", "", term)))
 
-# 画图
-ggplot(coef_df, aes(x = year, y = estimate)) +
-  geom_point() +
-  geom_line() +
-  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
-                    ymax = estimate + 1.96 * std.error), width = 0.2) +
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  geom_vline(xintercept = 2013, linetype = "dashed", color = "gray") +
-  labs(title = "Traditional DID: Parallel Trend Check",
-       x = "Year",
-       y = "Treatment Effect on log(wastewater_ems)") +
-  theme_minimal()
