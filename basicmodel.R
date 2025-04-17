@@ -5,26 +5,14 @@ library(broom)
 library(dplyr)
 library(ggplot2)
 data <- read_excel("traindata.xlsx", sheet = 3)
-data$wastewater_ems <- as.numeric(data$wastewater_ems)
-data$SO2_ems <- as.numeric(as.character(data$SO2_ems))
-data$smoke_ems <- as.numeric(as.character(data$smoke_ems))
 data$entropy_score <- as.numeric(as.character(dataszf$entropy_score))
 unique(data$中欧班列开通时间)
 data$treat <- ifelse(data$中欧班列开通时间 == 10000000, 0, 1)
 head(data[, c("中欧班列开通时间", "treat")])
 data$X <- data$after * data$treat
-#model1:log熵权法数据-有控制变量-有固定效应版本
-model_1 <- lm(log(entropy_score) ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
-summary(model_1)
-#model2:熵权法数据-有控制变量-有固定效应版本
-model_2 <- lm(entropy_score ~ X + LN_GDP + FIEI + pop_num + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
-summary(model_2)
-#model3:log熵权法数据-控制变量删去pop_num-有固定效应版本--最终选择版本
 model_3 <- lm(log(entropy_score) ~ X + LN_GDP + FIEI + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
 summary(model_3)
-#model4:熵权法数据-控制变量删去pop_num-有固定效应版本
-model_4 <- lm(log(entropy_score) ~ X + LN_GDP + openness + gov_intervention + factor(Ctnm) + factor(year), data = data)
-summary(model_4)
+
 #可视化-多期did效应
 model_paratrend <- feols(
   log(entropy_score + 1e-5) ~ i(year, treat, ref = 2012) + 
